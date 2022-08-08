@@ -45,7 +45,7 @@ TT_PLUS    = 'plus'
 TT_MINUS   = 'minus'
 TT_MUL     = 'multiply'
 TT_DIV     = 'divide'
-TT_MODULUS = 'modulus'
+TT_MODULO  = 'modulo'
 TT_POWER   = 'power'
 
 TT_LPAREN   = 'lparen'
@@ -241,6 +241,9 @@ class Lexer():
             elif self.cc == "^":
                 tokens.append(Token(TT_POWER, pos_start=self.pos))
                 self.advance()
+            elif self.cc == "%":
+                tokens.append(Token(TT_MODULO, pos_start=self.pos))
+                self.advance()
             elif self.cc == "=":
                 tokens.append(Token(TT_EQ, pos_start=self.pos))
                 self.advance()
@@ -405,7 +408,7 @@ class Parser():
 
         return self.power()
     def term(self):
-        return self.bin_op(self.factor, (TT_MUL, TT_DIV))
+        return self.bin_op(self.factor, (TT_MUL, TT_DIV, TT_MODULO))
     def expr(self):
         res = ParseResult()
         if self.ct.matches(TT_KEYWORD, 'let'):
@@ -505,7 +508,7 @@ class Number():
     def div(self, o):
         if isinstance(o, self.__class__):
             if o.val == 0: return None, RTError(
-                "Division by 0!", o.pos_start, o.pos_end,
+                "Division by 0.", o.pos_start, o.pos_end,
                 self.ctx
             )
             return Number(self.val / o.val).set_context(self.ctx), None
@@ -514,6 +517,9 @@ class Number():
             return Number(self.val ** o.val).set_context(self.ctx), None
     def mod(self, o):
         if isinstance(o, self.__class__):
+            if o.val == 0: return None, RTError(
+                "Modulo by 0.", o.pos_start, o.pos_end, self.ctx
+            )
             return Number(self.val % o.val).set_context(self.ctx), None
 
     def __repr__(self):
@@ -582,7 +588,9 @@ class Interpreter():
             res, error = left.div(right)
         elif node.op.type == TT_POWER:
             res, error = left.power(right)
-
+        elif node.op.type == TT_MODULO: 
+            res, error = left.mod(right)
+            
         if error:
             return rtres.failure(error)
         else:
