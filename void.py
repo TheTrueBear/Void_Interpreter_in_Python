@@ -638,7 +638,7 @@ class Parser():
         self.advance()
 
         # Make sure you have an identifier
-        if not self.ct.type != TT_IDENTIFY:
+        if self.ct.type != TT_IDENTIFY:
             return res.failure(InvalidSyntaxError("Expected identifier, got %s" % self.ct, self.ct.pos_start, self.ct.pos_end))
 
         # Get the var name
@@ -700,7 +700,34 @@ class Parser():
 
     # While loop
     def while_expr(self):
-        pass
+        res = ParseResult()
+
+        # Get the while keyword
+        if not self.ct.matches(TT_KEYWORD, "while"):
+            return res.failure(InvalidSyntaxError("Expected 'while', got %s" % self.ct, self.ct.pos_start, self.ct.pos_end))
+
+        # Advance
+        res.register_advancement()
+        self.advance()
+
+        # Get the condition
+        condition = res.register(self.expr())
+        if res.error: return res
+
+        # Get the then keyword. TODO: Change this to a curly brace.
+        if not self.ct.matches(TT_KEYWORD, "then"):
+            return res.failure(InvalidSyntaxError("Expected 'then', got %s" % self.ct, self.ct.pos_start, self.ct.pos_end))
+        
+        # Advance
+        res.register_advancement()
+        self.advance()
+
+        # Get the body
+        body = res.register(self.expr())
+        if res.error: return res
+
+        # Return the node
+        return res.success(WhileNode(condition, body))
 
     ###############################
     # Parse                       #
@@ -959,6 +986,62 @@ class Interpreter():
             if res.error: return res
             return res.success(else_value)
         
+        return res.success(None)
+
+    def visit_ForNode(self, node, ctx):
+        res = RTResult()
+
+        # Get the start value
+        start_value = res.register(self.visit(node.start, ctx))
+        if res.error: return res
+
+        # Get the end value
+        end_value = res.register(self.visit(node.end, ctx))
+        if res.error: return res
+
+        # Get the step value
+        if node.step:
+            step_value = res.register(self.visit(node.step, ctx))
+            if res.error: return res
+        else:
+            step_value = Number(1)
+
+        # Set i
+        i = start_value.val
+        
+        # Run the loop if step is bigger than 1
+        if step_value.val >= 0: 
+            condition = lambda: i < end_value.val
+        else:
+            condition = lambda: i > end_value.val
+
+        # Loop while the condition is true
+        while condition():
+            ctx.symbol_table._set(node.name.value, Number(i))
+            i += step_value.val
+            res.register(self.visit(node.body, ctx))
+            if res.error: return res
+        
+        # Return success
+        return res.success(None)
+    def visit_WhileNode(self, node, ctx):
+        res = RTResult()
+
+        # Loop through the whole thing
+        while True:
+            # Condition
+            condition = res.register(self.visit(node.condition, ctx))
+            if res.error: return res
+
+            # Break once the condition is false
+            if not condition.is_true():
+                break
+
+            # Run the body
+            res.register(self.visit(node.body, ctx))
+            if res.error: return res
+        
+        # Return success
         return res.success(None)
 
 ###############################
