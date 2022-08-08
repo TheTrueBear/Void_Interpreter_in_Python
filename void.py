@@ -65,15 +65,20 @@ TT_LT = 'less than'
 TT_LE = 'less than or equal to'
 
 KEYWORDS = [
-    "let",  # Make a variable
-    "not",  # Invert conditional statement
-    "or",   # 'a or b': return true if either is true
-    "and",  # 'a and b': return true if both are true
+    "let",   # Make a variable
+    "not",   # Invert conditional statement
+    "or",    # 'a or b': return true if either is true
+    "and",   # 'a and b': return true if both are true
 
-    "if",   # Used for if statements
-    "elif", # Else if statement
-    "else", # Else statement
-    "then", # Placeholder for if statements
+    "if",    # Used for if statements
+    "elif",  # Else if statement
+    "else",  # Else statement
+    "then",  # Placeholder for if statements
+
+    "for",   # Used for a for loop.
+    "to",    # Used for a for loop, to specify end value
+    "step",  # Used in a for loop to change the step
+    "while", # Used for a while loop
 ]
 
 ###############################
@@ -356,6 +361,24 @@ class IfNode():
         self.pos_start = self.cases[0][0].pos_start
         self.pos_end = (self.else_case or self.cases[-1][0]).pos_end
 
+class ForNode():
+    def __init__(self, name, start, end, step, body):
+        self.name = name
+        self.start = start
+        self.end = end
+        self.step = step
+        self.body = body
+        
+        self.pos_start = self.name.pos_start
+        self.pos_end = self.body.pos_end
+class WhileNode():
+    def __init__(self, condition, body):
+        self.condition = condition
+        self.body = body
+
+        self.pos_start = self.condition.pos_start
+        self.pos_end = self.body.pos_end
+
 ###############################
 # Parse result                #
 ###############################
@@ -444,6 +467,15 @@ class Parser():
             if_expr = res.register(self.if_expr())
             if res.error: return res
             return res.success(if_expr)
+        
+        elif tok.matches(TT_KEYWORD, "for"):
+            for_expr = res.register(self.for_expr())
+            if res.error: return res
+            return res.success(for_expr)
+        elif tok.matches(TT_KEYWORD, "while"):
+            while_expr = res.register(self.while_expr())
+            if res.error: return res
+            return res.success(while_expr)
 
         return res.failure(InvalidSyntaxError(
             "Expected int, float, identifier, '+', '-', or '(', got %s" % tok,
@@ -590,6 +622,85 @@ class Parser():
         
         # Return an IF node
         return res.success(IfNode(cases, else_case))
+    # Read for statement
+    def for_expr(self):
+        res = ParseResult()
+
+        # Make sure it starts with a FOR key
+        if not self.ct.matches(TT_KEYWORD, "for"):
+            return res.failure(InvalidSyntaxError(
+                "Expected 'for', got %s" % self.ct,
+                self.ct.pos_start, self.ct.pos_end
+            ))
+
+        # Advance
+        res.register_advancement()
+        self.advance()
+
+        # Make sure you have an identifier
+        if not self.ct.type != TT_IDENTIFY:
+            return res.failure(InvalidSyntaxError("Expected identifier, got %s" % self.ct, self.ct.pos_start, self.ct.pos_end))
+
+        # Get the var name
+        var_name = self.ct
+
+        # Advance
+        res.register_advancement()
+        self.advance()
+
+        # Get the equal sign
+        if self.ct.type != TT_EQ:
+            return res.failure(InvalidSyntaxError("Expected equal sign, got %s" % self.ct, self.ct.pos_start, self.ct.pos_end))
+
+        # Advance
+        res.register_advancement()
+        self.advance()
+
+        # Get start value
+        start_value = res.register(self.expr())
+        if res.error: return res
+
+        # Get the to keyword
+        if not self.ct.matches(TT_KEYWORD, "to"):
+            return res.failure(InvalidSyntaxError("Expected 'to', got %s" % self.ct, self.ct.pos_start, self.ct.pos_end))
+        
+        # Advance
+        res.register_advancement()
+        self.advance()
+
+        # Get the end value
+        end_value = res.register(self.expr())
+        if res.error: return res
+
+        # Get the step. NOTE: OPTIONAL
+        if self.ct.matches(TT_KEYWORD, "step"):
+            res.register_advancement()
+            self.advance()
+
+            # Get the value
+            step_value = res.register(self.expr())
+            if res.error: return res
+        else:
+            step_value = None
+        
+        # If there is no THEN. TODO: Change this to a curly brace
+        if not self.ct.matches(TT_KEYWORD, "then"):
+            return res.failure(InvalidSyntaxError("Expected 'then', got %s" % self.ct, self.ct.pos_start, self.ct.pos_end))
+
+        # Advance
+        res.register_advancement()
+        self.advance()
+
+        # Get the body
+        body = res.register(self.expr())
+        if res.error: return res
+
+        # Return the node
+        return res.success(ForNode(var_name, start_value, end_value, step_value, body))
+
+    # While loop
+    def while_expr(self):
+        pass
 
     ###############################
     # Parse                       #
