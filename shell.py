@@ -1,6 +1,6 @@
 # Sys
 import sys
-import ws
+import void
 
 # Constants
 _ARGV: list = sys.argv
@@ -15,11 +15,10 @@ while True:
     else:
         with open(_ARGV[1]) as f:
             text = f.read()
-        print("No such file as %s" % _ARGV[1])
         file = True
 
     # Code
-    r, e = ws.run(text, "<stdin>" if not file else _ARGV[1].split(".")[0])
+    r, e = void.run(text, "<stdin>" if not file else _ARGV[1].split(".")[0])
     if e: print(repr(e))
     else: print(r)
 
