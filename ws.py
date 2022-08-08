@@ -72,7 +72,7 @@ KEYWORDS = [
     "while", # While loop
     "elseif", # Else if
     "else", # Else
-    "in", # If something is in something else
+    "in", # If something is in something else, e.g: "if "A" in "Are you a bear?"
     "export", # Make something public for files
 ]
 
@@ -649,4 +649,3 @@ def run(text, fn) -> None:
 
     # Return
     return res.value, res.error
-    
