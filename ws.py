@@ -64,16 +64,9 @@ TT_LE = 'less than or equal to'
 
 KEYWORDS = [
     "let", # Make a variable
-    "const", # Make a constant
-    "fun", # Make a function
-    "is", # Is
-    "if", # If
-    "for", # For loop
-    "while", # While loop
-    "elseif", # Else if
-    "else", # Else
-    "in", # If something is in something else, e.g: "if "A" in "Are you a bear?"
-    "export", # Make something public for files
+    "not", # Invert conditional statement
+    "or", # 'a or b': return true if either is true
+    "and", # 'a and b': return true if both are true
 ]
 
 ###############################
@@ -160,7 +153,9 @@ class RTError(Error):
         result += f'{self.name}: {self.details}'
         result += f'\n\n{string_with_arrows(self.pos_start.ftxt, self.pos_start, self.pos_end)}'
         return result
-
+class ExpectedCharError(Error):
+    def __init__(self, details, pos_start, pos_end):
+        super().__init__("Expected character", details, pos_start, pos_end)
 
 ###############################
 # Lexer                       #
@@ -208,6 +203,36 @@ class Lexer():
 
         tok_type = TT_KEYWORD if id_str in KEYWORDS else TT_IDENTIFY
         return Token(tok_type, id_str, pos_start, self.pos)
+    
+    # Make not equals
+    def make_ne(self):
+        pos_start = self.pos.copy()
+        self.advance()
+        if self.cc == "=":
+            self.advance()
+            return Token(TT_NE, pos_start, self.pos), None
+        return None, ExpectedCharError("Character '=' expected after '!'.", pos_start, self.pos)
+    def make_equals(self):
+        pos_start = self.pos.copy()
+        self.advance()
+        tok_type = TT_EQ
+        if self.cc == "=":
+            tok_type = TT_EE
+        return Token(tok_type, None, pos_start, self.pos)
+    def make_lt(self):
+        pos_start = self.pos.copy()
+        self.advance()
+        tok_type = TT_LT
+        if self.cc == "=":
+            tok_type = TT_LE
+        return Token(tok_type, None, pos_start, self.pos)
+    def make_gt(self):
+        pos_start = self.pos.copy()
+        self.advance()
+        tok_type = TT_GT
+        if self.cc == "=":
+            tok_type = TT_GE
+        return Token(tok_type, None, pos_start, self.pos)
 
     # Tokenize
     def tokenize(self):
@@ -244,15 +269,24 @@ class Lexer():
             elif self.cc == "%":
                 tokens.append(Token(TT_MODULO, pos_start=self.pos))
                 self.advance()
-            elif self.cc == "=":
-                tokens.append(Token(TT_EQ, pos_start=self.pos))
-                self.advance()
             elif self.cc == "(":
                 tokens.append(Token(TT_LPAREN, pos_start=self.pos))
                 self.advance()
             elif self.cc == ")":
                 tokens.append(Token(TT_RPAREN, pos_start=self.pos))
                 self.advance()
+            
+            # Conditionals
+            elif self.cc == "=":
+                tokens.append(self.make_equals())
+            elif self.cc == "!":
+                tok, error = self.make_ne()
+                if error: return [], error
+                tokens.append(tok)
+            elif self.cc == "<":
+                tokens.append(self.make_lt())
+            elif self.cc == ">":
+                tokens.append(self.make_gt())
 
             # Errors
             else:
@@ -590,7 +624,7 @@ class Interpreter():
             res, error = left.power(right)
         elif node.op.type == TT_MODULO: 
             res, error = left.mod(right)
-            
+
         if error:
             return rtres.failure(error)
         else:
