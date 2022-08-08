@@ -217,6 +217,7 @@ class Lexer():
         self.advance()
         tok_type = TT_EQ
         if self.cc == "=":
+            self.advance()
             tok_type = TT_EE
         return Token(tok_type, None, pos_start, self.pos)
     def make_lt(self):
@@ -224,6 +225,7 @@ class Lexer():
         self.advance()
         tok_type = TT_LT
         if self.cc == "=":
+            self.advance()
             tok_type = TT_LE
         return Token(tok_type, None, pos_start, self.pos)
     def make_gt(self):
@@ -231,6 +233,7 @@ class Lexer():
         self.advance()
         tok_type = TT_GT
         if self.cc == "=":
+            self.advance()
             tok_type = TT_GE
         return Token(tok_type, None, pos_start, self.pos)
 
@@ -381,7 +384,7 @@ class Parser():
         left = res.register(func())
         if res.error: return res
 
-        while self.ct.type in ops:
+        while self.ct.type in ops or (self.ct.type, self.ct.value) in ops:
             op = self.ct
             res.register_advancement()
             self.advance()
@@ -443,6 +446,23 @@ class Parser():
         return self.power()
     def term(self):
         return self.bin_op(self.factor, (TT_MUL, TT_DIV, TT_MODULO))
+    def arith_expr(self):
+        return self.bin_op(self.term, (TT_PLUS, TT_MINUS))
+    def comp_expr(self):
+        res = ParseResult()
+        if self.ct.matches(TT_KEYWORD, "not"):
+            op = self.ct
+            res.register_advancement()
+            self.advance()
+            node = res.register(self.comp_expr())
+            if res.error: return res
+            return res.success(UnaryOpNode(op, node))
+        node = res.register(self.bin_op(self.arith_expr, (TT_EE, TT_NE, TT_LT, TT_GT, TT_GE, TT_LE)))
+        if res.error: return res.failure(InvalidSyntaxError(
+            "Expected int, float, identifier, 'not', '+', '-', or '(', got %s" % self.ct,
+            self.ct.pos_start, self.ct.pos_end
+        ))
+        return res.success(node)
     def expr(self):
         res = ParseResult()
         if self.ct.matches(TT_KEYWORD, 'let'):
@@ -469,7 +489,7 @@ class Parser():
             if res.error: return res
             return res.success(VarAssignNode(var_name, expr))
 
-        node = res.register(self.bin_op(self.term, (TT_PLUS, TT_MINUS)))
+        node = res.register(self.bin_op(self.comp_expr, ((TT_KEYWORD, 'and'), (TT_KEYWORD, 'or'))))
         if res.error:
             return res.failure(InvalidSyntaxError(
                 "Expected int, float, identifier, 'let', '+', '-', or '(', got %s" % self.ct,
@@ -530,6 +550,7 @@ class Number():
         copy.set_context(self.ctx)
         return copy
 
+    # Arithmetic
     def add(self, o):
         if isinstance(o, self.__class__):
             return Number(self.val + o.val).set_context(self.ctx), None
@@ -555,6 +576,34 @@ class Number():
                 "Modulo by 0.", o.pos_start, o.pos_end, self.ctx
             )
             return Number(self.val % o.val).set_context(self.ctx), None
+    
+    # Comparison
+    def comparison_ee(self, o):
+        if isinstance(o, self.__class__):
+            return Number(int(self.val == o.val)).set_context(self.ctx), None
+    def comparison_ne(self, o):
+        if isinstance(o, self.__class__):
+            return Number(int(self.val != o.val)).set_context(self.ctx), None
+    def comparison_gt(self, o):
+        if isinstance(o, self.__class__):
+            return Number(int(self.val > o.val)).set_context(self.ctx), None
+    def comparison_lt(self, o):
+        if isinstance(o, self.__class__):
+            return Number(int(self.val < o.val)).set_context(self.ctx), None
+    def comparison_ge(self, o):
+        if isinstance(o, self.__class__):
+            return Number(int(self.val >= o.val)).set_context(self.ctx), None
+    def comparison_le(self, o):
+        if isinstance(o, self.__class__):
+            return Number(int(self.val <= o.val)).set_context(self.ctx), None
+    def comparison_and(self, o):
+        if isinstance(o, self.__class__):
+            return Number(int(self.val and o.val)).set_context(self.ctx), None
+    def comparison_or(self, o):
+        if isinstance(o, self.__class__):
+            return Number(int(self.val or o.val)).set_context(self.ctx), None
+    def notted(self):
+        return Number((self.val - 1) % 2).set_context(self.ctx), None
 
     def __repr__(self):
         return str(self.val)
@@ -611,7 +660,9 @@ class Interpreter():
         right = rtres.register(self.visit(node.right, ctx))
         if rtres.error: return rtres
 
+
         res, error = None, None
+        # Arithmetic operators
         if node.op.type == TT_PLUS:
             res, error = left.add(right)
         elif node.op.type == TT_MINUS:
@@ -625,6 +676,24 @@ class Interpreter():
         elif node.op.type == TT_MODULO: 
             res, error = left.mod(right)
 
+        # Comparison operators
+        elif node.op.type == TT_EE:
+            res, error = left.comparison_ee(right)
+        elif node.op.type == TT_NE:
+            res, error = left.comparison_ne(right)
+        elif node.op.type == TT_LT:
+            res, error = left.comparison_lt(right)
+        elif node.op.type == TT_GT:
+            res, error = left.comparison_gt(right)
+        elif node.op.type == TT_LE:
+            res, error = left.comparison_le(right)
+        elif node.op.type == TT_GE:
+            res, error = left.comparison_ge(right)
+        elif node.op.matches(TT_KEYWORD, "and"):
+            res, error = left.comparison_and(right)
+        elif node.op.matches(TT_KEYWORD, "or"):
+            res, error = left.comparison_or(right)
+
         if error:
             return rtres.failure(error)
         else:
@@ -637,6 +706,8 @@ class Interpreter():
         error = None
         if node.op.type == TT_MINUS:
             number, error = number.mul(Number(-1))
+        elif node.op.matches(TT_KEYWORD, "not"):
+            number, error = number.notted()
 
         if error: return res.failure(error)
         return res.success(number.set_pos(node.pos_start, node.pos_end))
