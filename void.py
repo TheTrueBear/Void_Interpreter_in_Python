@@ -741,6 +741,8 @@ GLOBAL_SYMBOLS = SymbolTable()
 
 # Default variables
 GLOBAL_SYMBOLS._set("void", Number(0))
+GLOBAL_SYMBOLS._set("true", Number(1))
+GLOBAL_SYMBOLS._set("false", Number(0))
 
 # Run
 def run(text, fn) -> None:
