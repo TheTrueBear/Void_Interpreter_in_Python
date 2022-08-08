@@ -50,6 +50,8 @@ TT_POWER   = 'power'
 
 TT_LPAREN   = 'lparen'
 TT_RPAREN   = 'rparen'
+TT_LBRACE   = 'lbrace'
+TT_RBRACE   = 'rbrace'
 TT_KEYWORD  = 'keyword'
 TT_IDENTIFY = 'identifier'
 TT_EQ       = 'equals'
@@ -63,10 +65,15 @@ TT_LT = 'less than'
 TT_LE = 'less than or equal to'
 
 KEYWORDS = [
-    "let", # Make a variable
-    "not", # Invert conditional statement
-    "or", # 'a or b': return true if either is true
-    "and", # 'a and b': return true if both are true
+    "let",  # Make a variable
+    "not",  # Invert conditional statement
+    "or",   # 'a or b': return true if either is true
+    "and",  # 'a and b': return true if both are true
+
+    "if",   # Used for if statements
+    "elif", # Else if statement
+    "else", # Else statement
+    "then", # Placeholder for if statements
 ]
 
 ###############################
@@ -341,6 +348,14 @@ class VarAssignNode():
         self.pos_start = self.name.pos_start
         self.pos_end = self.value.pos_end
 
+class IfNode():
+    def __init__(self, cases, else_case):
+        self.cases = cases
+        self.else_case = else_case
+
+        self.pos_start = self.cases[0][0].pos_start
+        self.pos_end = (self.else_case or self.cases[-1][0]).pos_end
+
 ###############################
 # Parse result                #
 ###############################
@@ -425,6 +440,10 @@ class Parser():
                     "Expected right parenthesis (')'), got %s" % repr(self.ct),
                     self.ct.pos_start, self.ct.pos_end
                 ))
+        elif tok.matches(TT_KEYWORD, "if"):
+            if_expr = res.register(self.if_expr())
+            if res.error: return res
+            return res.success(if_expr)
 
         return res.failure(InvalidSyntaxError(
             "Expected int, float, identifier, '+', '-', or '(', got %s" % tok,
@@ -496,6 +515,81 @@ class Parser():
                 self.ct.pos_start, self.ct.pos_end
             ))
         return res.success(node)
+    # Read if statement
+    def if_expr(self):
+        # Set up variables
+        res = ParseResult()
+        cases = []
+        else_case = None
+
+        # Make sure the first keyword is IF
+        if not self.ct.matches(TT_KEYWORD, "if"):
+            return res.failure(InvalidSyntaxError(
+                "Expected 'if', got %s" % self.ct,
+                self.ct.pos_start, self.ct.pos_end
+            ))
+
+        # Advance
+        res.register_advancement()
+        self.advance()
+
+        # Get the condition
+        condition = res.register(self.expr())
+        if res.error: return res
+
+        # TODO: Change this to use curly braces ('{}').
+        if not self.ct.matches(TT_KEYWORD, "then"):
+            return res.failure(InvalidSyntaxError(
+                "Expected 'then', got %s" % self.ct,
+                self.ct.pos_start, self.ct.pos_end
+            ))
+        
+        # Advance
+        res.register_advancement()
+        self.advance()
+
+        # Get the code
+        expr = res.register(self.expr())
+        if res.error: return res
+        cases.append((condition, expr))
+
+        # Read for elif statements
+        while self.ct.matches(TT_KEYWORD, "elif"):
+            # Advance
+            res.register_advancement()
+            self.advance()
+
+            # Get the condition
+            condition = res.register(self.expr())
+            if res.error: return res
+            
+            # TODO: Change this to use curly braces ('{}').
+            if not self.ct.matches(TT_KEYWORD, "then"):
+                return res.failure(InvalidSyntaxError(
+                    "Expected 'then', got %s" % self.ct,
+                    self.ct.pos_start, self.ct.pos_end
+                ))
+            
+            # Advance
+            res.register_advancement()
+            self.advance()
+
+            # Get the code
+            expr = res.register(self.expr())
+            if res.error: return res
+            cases.append((condition, expr))
+        
+        # Read for an if statement
+        if self.ct.matches(TT_KEYWORD, "else"):
+            res.register_advancement()
+            self.advance()
+
+            # Get the expression
+            else_case = res.register(self.expr())
+            if res.error: return res
+        
+        # Return an IF node
+        return res.success(IfNode(cases, else_case))
 
     ###############################
     # Parse                       #

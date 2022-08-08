@@ -18,3 +18,8 @@ power: atom (POW factor)*
 
 atom: LPAREN expr RPAREN
     : INT|FLOAT|ID
+    : if-expr
+
+if-expr: KEY:if expr KEY:then expr
+       : (KEY:elif expr KEY:then expr)*
+       : (KEY:else expr)?
