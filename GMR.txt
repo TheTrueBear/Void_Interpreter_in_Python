@@ -1,0 +1,15 @@
+
+
+
+expr: KEY:let ID EQ expr
+    : term ((PLUS|MINUS)term)*
+
+term: factor ((MUL|DIV|MOD) factor)*
+
+factor: (PLUS|MINUS) factor
+      : power
+
+power: atom (POW factor)*
+
+atom: LPAREN expr RPAREN
+    : INT|FLOAT|ID
