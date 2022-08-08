@@ -20,7 +20,7 @@ while True:
     # Code
     r, e = void.run(text, "<stdin>" if not file else _ARGV[1].split(".")[0])
     if e: print(repr(e))
-    else: print(r)
+    elif r: print(r)
 
     # Else
     if file: break
