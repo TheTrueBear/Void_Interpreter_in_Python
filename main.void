@@ -1,3 +1,25 @@
-if 1 == 1 {
-    1 + 2
+~~ For loop.
+~~{
+    Base structure:
+    for <name> = <start> to <end> {
+        <code>
+    }
+    Optional to do this:
+    for <name> = <start> to <end> step <step amount> {
+        <code>
+    }
+    Step defaults to 1
+}
+for i = 10 to 20 {
+    print(i)
+}
+
+~~ While loop.
+~~{
+    while <condition> {
+        <code>
+    }
+}
+while true {
+    print("Hello, world!")
 }
