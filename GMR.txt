@@ -14,13 +14,16 @@ term: factor ((MUL|DIV|MOD) factor)*
 factor: (PLUS|MINUS) factor
       : power
 
-power: atom (POW factor)*
+power: call (POW factor)*
+
+call: atom (LPAREN (expr (COMMA expr)*)? RPAREN)?
 
 atom: LPAREN expr RPAREN
     : INT|FLOAT|ID
     : if-expr
     : for-expr
     : while-expr
+    : func-def
 
 if-expr: KEY:if expr KEY:then expr
        : (KEY:elif expr KEY:then expr)*
@@ -30,3 +33,7 @@ for-expr: KEY:for ID EQ expr KEY:to expr
           (KEY:step expr)? KEY:then expr
 
 while-expr: KEY:while expr KEY:then expr
+
+func-def: KEY:fun ID?
+          LPAREN (ID (COMMA, ID)*)? RPAREN
+          ARROW expr 
