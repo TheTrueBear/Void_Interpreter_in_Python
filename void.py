@@ -39,7 +39,9 @@ ID_ALLOW       = ALPH + DIGITS + "_"
 ID_START_ALLOW = ALPH + "_"
 
 TT_INT    = 'integer'
-TT_FLOAT = 'float'
+TT_FLOAT  = 'float'
+TT_STRING = 'string'
+TT_LIST   = 'list'
 
 TT_PLUS    = 'plus'
 TT_MINUS   = 'minus'
@@ -48,10 +50,13 @@ TT_DIV     = 'divide'
 TT_MODULO  = 'modulo'
 TT_POWER   = 'power'
 
+TT_LBRACKET = 'lbracket'
+TT_RBRACKET = 'rbracket'
 TT_LPAREN   = 'lparen'
 TT_RPAREN   = 'rparen'
 TT_LBRACE   = 'lbrace'
 TT_RBRACE   = 'rbrace'
+
 TT_ARROW    = 'arrow'
 TT_COMMA    = 'comma'
 TT_KEYWORD  = 'keyword'
@@ -260,6 +265,32 @@ class Lexer():
             self.advance()
             tok_type = TT_ARROW
         return Token(tok_type, None, pos_start, self.pos)
+    
+    # Make a string
+    def make_string(self):
+        string = ""
+        pos_start = self.pos.copy()
+        escape_char = False
+        self.advance()
+
+        escape_chars = {
+            "n": "\n",
+            "t": "\t",
+        }
+
+        while self.cc != None and (self.cc != "\"" or escape_char):
+            if escape_char:
+                escape_char = False
+                string += escape_chars.get(self.cc, self.cc)
+            else:
+                if self.cc == "\\":
+                    escape_char = True
+                else:
+                    string += self.cc
+            self.advance()
+        
+        self.advance()
+        return Token(TT_STRING, string, pos_start, self.pos)
 
     # Tokenize
     def tokenize(self):
@@ -304,6 +335,8 @@ class Lexer():
             elif self.cc == ",":
                 tokens.append(Token(TT_COMMA, pos_start=self.pos))
                 self.advance()
+            elif self.cc == "\"":
+                tokens.append(self.make_string())
             
             # Conditionals
             elif self.cc == "=":
@@ -355,6 +388,14 @@ class UnaryOpNode():
     def __repr__(self):
         return f'({self.op}, {self.node})'
 
+class StringNode():
+    def __init__(self, tok):
+        self.tok = tok
+        self.pos_start = self.tok.pos_start
+        self.pos_end = self.tok.pos_end
+    def __repr__(self):
+        return f'{self.tok}'
+        
 class VarAccessNode():
     def __init__(self, name):
         self.name = name
@@ -484,6 +525,10 @@ class Parser():
             res.register_advancement()
             self.advance()
             return res.success(VarAccessNode(tok))
+        elif tok.type == TT_STRING:
+            res.register_advancement()
+            self.advance()
+            return res.success(StringNode(tok))
 
         elif tok.type == TT_LPAREN:
             res.register_advancement()
@@ -1118,6 +1163,22 @@ class Function(Value):
         copy.set_pos(self.pos_start, self.pos_end)
         return copy
     def __repr__(self): return f'<function {self.name}>'
+class String(Value):
+    def __init__(self, value):
+        super().__init__()
+        self.val = value
+    def add(self, o):
+        if isinstance(o, String):
+            return String(self.val + o.val).set_context(self.ctx), None
+        return None, Value.illegal_operation(self, o)
+    def is_true(self):
+        return len(self.val) != 0
+    def copy(self):
+        copy = String(self.val)
+        copy.set_pos(self.pos_start, self.pos_end)
+        copy.set_context(self.ctx)
+        return copy
+    def __repr__(self): return f'"{self.val}"'
 
 ###############################
 # Context                     #
@@ -1222,6 +1283,9 @@ class Interpreter():
 
         if error: return res.failure(error)
         return res.success(number.set_pos(node.pos_start, node.pos_end))
+
+    def visit_StringNode(self, node, ctx):
+        return RTResult().success(String(node.tok.value).set_context(ctx))
 
     def visit_VarAccessNode(self, node, ctx):
         res = RTResult()
